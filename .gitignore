@@ -1,0 +1,21 @@
+# python
+
+venv/
+__pycache__/
+
+# build
+
+build/
+dist/
+pip*.txt
+
+# temp
+
+temp/
+*.log
+*log.txt
+
+# ide
+
+*.iml
+.idea/
