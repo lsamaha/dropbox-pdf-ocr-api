@@ -43,6 +43,12 @@ rm -rf $build_dir/s3*
 # install src
 cp -r $src_dir/*.py $build_dir
 
+# dependencies
+cd $temp_dir
+wget https://s3.amazonaws.com/meadowbrook-public/datachase/dropbox-pdf-ocr-api/dependencies/0/dependencies.zip
+unzip dependencies.zip
+cp -r ./dependencies/* $build_dir
+
 # zip
 cd $build_dir
 zip -r $zip_name .

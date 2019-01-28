@@ -46,7 +46,7 @@ def lambda_handler(event, context):
         elif 'get' == httpMethod:
             __logger.info("dropbox webhook verification")
             try:
-                return DropboxHelper(None, None).verify(event["queryStringParameters"]["challenge"])
+                return DropboxHelper(None, None, None).verify(event["queryStringParameters"]["challenge"])
             except Exception as e:
                 return resp(400, json.dumps(err(msg="unable to verify %s") % e))
         else:
