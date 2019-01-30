@@ -22,7 +22,10 @@ class S3CursorHelper(object):
         try:
             return s3_resource.Object(self.__s3_bucket, self.cursor_path(account)).get()['Body'].read().decode("utf-8")
         except Exception as e:
-            print(e)
+            if "NoSuchKey" in str(e):
+                print("no cursor exists at %s" % self.cursor_path(account))
+            else:
+                print("warning: %s" % e)
             return None
 
     def set_cursor(self, s3_resource, account, cursor):

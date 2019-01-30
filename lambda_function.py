@@ -22,7 +22,7 @@ def lambda_handler(event, context):
     __logger.info(event)
     httpMethod = event['requestContext']['httpMethod'].lower()
     secret = os.environ["dropbox_webhook_secret"]
-    account_token = os.environ["dropbox_account_token"]
+    app_token = os.environ["dropbox_app_token"]
     try:
         __logger.info(event)
         req_body = event['body']
@@ -39,7 +39,7 @@ def lambda_handler(event, context):
                                          s3_path=os.environ["s3_path"])
             ocr_helper = OCRHelper()
             updated = handle_changed_docs(req_body,
-                                          dropbox_helper=DropboxHelper(account_token, cursor_helper, s3_resource=boto3.resource("s3")),
+                                          dropbox_helper=DropboxHelper(app_token, cursor_helper, s3_resource=boto3.resource("s3")),
                                           pdf_helper=PDFHelper(),
                                           ocr_helper=ocr_helper)
             return resp(200, json.dumps({"updated": updated}))
@@ -91,11 +91,15 @@ def handle_changed_docs(req_body, dropbox_helper, pdf_helper, ocr_helper):
     """
     __logger.debug("getting changed docs %s" % json.dumps(req_body))
     uploaded_docs = {}
-    for account, doc_path in dropbox_helper.get_changed(req_body).items():
-        if pdf_helper.is_image_pdf(doc_path):
-            image = dropbox_helper.get_data(account, doc_path)
-            text = ocr_helper.convert_image(image)
-            __logger.info(text)
-            __logger.debug("converting doc %s %s" % (account, doc_path))
+    for account, doc_paths in dropbox_helper.get_changed(req_body).items():
+        for doc_path in doc_paths:
+            if pdf_helper.is_pdf(doc_path):
+                local_path = "/tmp%s" % doc_path
+                if pdf_helper.is_image_pdf(local_path):
+                    resp = dropbox_helper.download_file(doc_path, local_path)
+                    print(resp)
+                    text = ocr_helper.convert_image(local_path)
+                    __logger.info(text)
+                    __logger.debug("converting doc %s %s" % (account, doc_path))
     __logger.debug("uploaded docs %s" % uploaded_docs)
     return uploaded_docs

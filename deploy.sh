@@ -9,7 +9,7 @@ fi
 
 # config
 
-base_dir=.
+base_dir=$(pwd)
 src_dir=$base_dir
 build_dir=$base_dir/build
 temp_dir=$base_dir/temp
@@ -43,12 +43,6 @@ rm -rf $build_dir/s3*
 # install src
 cp -r $src_dir/*.py $build_dir
 
-# dependencies
-cd $temp_dir
-wget https://s3.amazonaws.com/meadowbrook-public/datachase/dropbox-pdf-ocr-api/dependencies/0/dependencies.zip
-unzip dependencies.zip
-cp -r ./dependencies/* $build_dir
-
 # zip
 cd $build_dir
 zip -r $zip_name .
@@ -56,7 +50,9 @@ cd $base_dir
 
 # upload to s3
 echo Deploying $s3_path
-aws s3 cp --acl bucket-owner-full-control $zip_name $s3_path
+aws s3 cp --acl bucket-owner-full-control $build_dir/$zip_name $s3_path
+
+echo https://s3.amazonaws.com/meadowbrook-build-deploy/$s3_path
 
 echo "Done."
 exit 0

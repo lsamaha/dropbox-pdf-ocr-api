@@ -5,10 +5,10 @@ from dropbox.files import DeletedMetadata, FolderMetadata
 
 class DropboxHelper(object):
 
-    def __init__(self, account_token, cursor_helper, s3_resource):
-        self.__account_token = account_token
+    def __init__(self, app_token, cursor_helper, s3_resource):
+        self.__app_token = app_token
         self.__cursor_helper = cursor_helper
-        self.__s3_resource =s3_resource
+        self.__s3_resource = s3_resource
 
     def get_changed(self, req_body):
         """
@@ -19,34 +19,41 @@ class DropboxHelper(object):
         """
         changed = {}
         for account in json.loads(req_body)['list_folder']['accounts']:
-            changed[account] = self.get_changed_for_account(account, self.__account_token, self.get_cursor(account))
+            account_changed, new_cursor = self.get_changed_for_account(account, self.__app_token, self.get_cursor(account))
+            if account_changed:
+                changed[account] = account_changed
+            if new_cursor:
+                self.set_cursor(account, new_cursor)
         return changed
 
-    def get_data(self, dropbox_path, account):
-        dropbox = Dropbox(self.__account_token)
-        _, resp = dropbox.files_download(dropbox_path)
-        return resp.Content
+    def download_file(self, dropbox_path, local_path):
+        dropbox = Dropbox(self.__app_token)
+        return dropbox.files_download_to_file(local_path, dropbox_path)
 
     def get_cursor(self, account):
         return self.__cursor_helper.get_cursor(self.__s3_resource, account)
 
     def set_cursor(self, account, cursor):
-        self.__cursor_helper.set_cursor(account, cursor)
+        print("updating cursor for %s to %s" % (account, cursor))
+        self.__cursor_helper.set_cursor(self.__s3_resource, account, cursor)
 
     def get_changed_for_account(self, account, account_token, cursor):
         dropbox = Dropbox(account_token)
         print("getting dropbox changed paths for account %s" % account)
         has_more = True
         dropbox_paths = []
+        new_cursor = None
         while has_more:
             if cursor is None:
                 result = dropbox.files_list_folder(path="")
             else:
                 result = dropbox.files_list_folder_continue(cursor)
+            print(result)
             dropbox_paths += [e.path_lower for e in result.entries if not isinstance(e, FolderMetadata) and not isinstance(e, DeletedMetadata)]
             has_more = result.has_more
+            new_cursor = result.cursor
         print(dropbox_paths)
-        return dropbox_paths
+        return dropbox_paths, new_cursor
 
     def verify(self, challenge):
         """
