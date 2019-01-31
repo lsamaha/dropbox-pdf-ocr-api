@@ -108,7 +108,7 @@ def handle_changed_docs(req_body, dropbox_helper, pdf_helper):
                 if text:
                     __logger.info(text)
                     __logger.debug("converted doc %s %s" % (account, dropbox_doc_path))
-                    upload_path = "%s%s" % (__upload_dir, ".".join(dropbox_doc_path.split(".")[:-1]))
+                    upload_path = "%s%s.txt" % (__upload_dir, ".".join(dropbox_doc_path.split(".")[:-1]))
                     result = dropbox_helper.store_data(text, upload_path)
                     print(result)
                     uploaded_docs.append(upload_path)
