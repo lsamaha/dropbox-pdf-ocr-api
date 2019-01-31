@@ -10,6 +10,11 @@ from pdf_helper import PDFHelper
 import hashlib
 
 
+__max_workers = int(os.environ["max_workers"]) if "max_workers" in os.environ else 4
+__resolution = int(os.environ["resolution"]) if "resolution" in os.environ else 120
+__upload_dir = int(os.environ["upload_dir"]) if "upload_dir" in os.environ else "output"
+if __upload_dir[0] is not "/":
+    __upload_dir = "/%s" % __upload_dir
 __logger = logging.getLogger()
 __logger.setLevel(logging.DEBUG if 'debug' in os.environ and os.environ['debug'].lower()[0] == 't' else logging.INFO)
 
@@ -40,8 +45,7 @@ def lambda_handler(event, context):
             ocr_helper = OCRHelper()
             updated = handle_changed_docs(req_body,
                                           dropbox_helper=DropboxHelper(app_token, cursor_helper, s3_resource=boto3.resource("s3")),
-                                          pdf_helper=PDFHelper(),
-                                          ocr_helper=ocr_helper)
+                                          pdf_helper=PDFHelper(ocr_helper))
             return resp(200, json.dumps({"updated": updated}))
         elif 'get' == httpMethod:
             __logger.info("dropbox webhook verification")
@@ -53,7 +57,7 @@ def lambda_handler(event, context):
             return resp(400, json.dumps(err(msg="unsupported request type")))
     except Exception as e:
         __logger.exception(e)
-        return resp(500, "Unable to match records %s" % str(e))
+        return resp(500, "Unable to react to changes %s" % str(e))
 
 
 def get_signature(event):
@@ -83,23 +87,30 @@ def resp(status_code, body, headers=None):
     return r
 
 
-def handle_changed_docs(req_body, dropbox_helper, pdf_helper, ocr_helper):
+def handle_changed_docs(req_body, dropbox_helper, pdf_helper):
     """
     Given a Dropbox changed doc webhook react to changed data.
     :param Dropbox webhook post data
     :return: a list of converted and reposted docs
     """
     __logger.debug("getting changed docs %s" % json.dumps(req_body))
-    uploaded_docs = {}
-    for account, doc_paths in dropbox_helper.get_changed(req_body).items():
-        for doc_path in doc_paths:
-            if pdf_helper.is_pdf(doc_path):
-                local_path = "/tmp%s" % doc_path
-                if pdf_helper.is_image_pdf(local_path):
-                    resp = dropbox_helper.download_file(doc_path, local_path)
-                    print(resp)
-                    text = ocr_helper.convert_image(local_path)
+    uploaded_docs = []
+    for account, dropbox_doc_paths in dropbox_helper.get_changed(req_body).items():
+        for dropbox_doc_path in dropbox_doc_paths:
+            if pdf_helper.is_pdf(dropbox_doc_path) and dropbox_doc_paths[-1 * len(__upload_dir):] != __upload_dir:
+                local_doc_path = "/tmp%s" % dropbox_doc_path
+                resp = dropbox_helper.download_file(dropbox_doc_path, local_doc_path)
+                print(resp)
+                with open(local_doc_path, "rb") as f:
+                    data = f.read()
+                    print("downloaded %d bytes" % len(data))
+                text = pdf_helper.get_text(local_doc_path, resolution=__resolution, max_workers=__max_workers)
+                if text:
                     __logger.info(text)
-                    __logger.debug("converting doc %s %s" % (account, doc_path))
+                    __logger.debug("converted doc %s %s" % (account, dropbox_doc_path))
+                    upload_path = "%s%s" % (__upload_dir, ".".join(dropbox_doc_path.split(".")[:-1]))
+                    result = dropbox_helper.store_data(text, upload_path)
+                    print(result)
+                    uploaded_docs.append(upload_path)
     __logger.debug("uploaded docs %s" % uploaded_docs)
     return uploaded_docs

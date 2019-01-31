@@ -1,7 +1,7 @@
+import io
 import json
 from dropbox import Dropbox
-from dropbox.files import DeletedMetadata, FolderMetadata
-
+from dropbox.files import DeletedMetadata, FolderMetadata, WriteMode
 
 class DropboxHelper(object):
 
@@ -29,6 +29,11 @@ class DropboxHelper(object):
     def download_file(self, dropbox_path, local_path):
         dropbox = Dropbox(self.__app_token)
         return dropbox.files_download_to_file(local_path, dropbox_path)
+
+    def store_data(self, data, dropbox_path):
+        dropbox = Dropbox(self.__app_token)
+        print("storing %s" % dropbox_path)
+        return dropbox.files_upload(data.encode("utf-8"), dropbox_path, mode=WriteMode.overwrite)
 
     def get_cursor(self, account):
         return self.__cursor_helper.get_cursor(self.__s3_resource, account)
