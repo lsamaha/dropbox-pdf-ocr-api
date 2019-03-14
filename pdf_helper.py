@@ -20,7 +20,7 @@ class PDFHelper(object):
             print("evaluating pdf as image")
             ocr_text_lines = OCRHelper().convert_image_to_text_lines(local_doc_path, resolution, max_workers)
             if len(ocr_text_lines) > len(text_lines):
-                print("prefering %d lines of ocr text to %d lines of pdf text" % (len(ocr_text_lines), len(text_lines)))
+                print("preferring %d lines of ocr text to %d lines of pdf text" % (len(ocr_text_lines), len(text_lines)))
                 text_lines = ocr_text_lines
         return "\n".join(text_lines)
 
@@ -31,6 +31,6 @@ class PDFHelper(object):
             all_lines += p.extractText().split("\n")
         return all_lines
 
-    def is_pdf(self, file_name):
+    def can_handle(self, file_name):
         pdf_ext = ".pdf"
         return len(file_name) > len(pdf_ext) and file_name[-1 * len(pdf_ext):].lower() == pdf_ext

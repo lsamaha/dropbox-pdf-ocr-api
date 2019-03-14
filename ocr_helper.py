@@ -12,7 +12,7 @@ class OCRHelper(object):
         pass
 
     def convert_image_to_text_lines(self, image_path, resolution=200, max_workers=4):
-        pg_texts = []
+        pg_text = ""
         image_pdf = WandImage(filename=image_path, resolution=resolution)
         print("opened pdf as image")
         jpg = image_pdf.convert('jpeg')
@@ -25,9 +25,10 @@ class OCRHelper(object):
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             result = executor.map(convert_image_bytes_to_text_lines, img_pgs)
         for part in list(result):
-            pg_texts += part
+            pg_text += part
+            print("adding %s" % part)
         print("completed ocr tasks in %ds" % (datetime.datetime.now() - start_time).seconds)
-        return pg_texts
+        return pg_text.split("\n")
 
 
 def convert_image_bytes_to_text_lines(img):

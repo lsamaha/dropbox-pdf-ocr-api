@@ -7,15 +7,18 @@ from dropbox_helper import DropboxHelper
 from s3_cursor_helper import S3CursorHelper
 from ocr_helper import OCRHelper
 from pdf_helper import PDFHelper
+from docx_helper import DocxHelper
 import hashlib
 
 
 __max_workers = int(os.environ["max_workers"]) if "max_workers" in os.environ else 4
 __resolution = int(os.environ["resolution"]) if "resolution" in os.environ else 120
-__upload_dir = int(os.environ["upload_dir"]) if "upload_dir" in os.environ else "output"
+__upload_dir = os.environ.get("upload_dir", "/app/output")
 if __upload_dir[0] is not "/":
     __upload_dir = "/%s" % __upload_dir
-__logger = logging.getLogger()
+if __upload_dir[-1] == "/":
+    __upload_dir = __upload_dir[:-1]
+__logger = logging.getLogger(__name__)
 __logger.setLevel(logging.DEBUG if 'debug' in os.environ and os.environ['debug'].lower()[0] == 't' else logging.INFO)
 
 
@@ -28,6 +31,7 @@ def lambda_handler(event, context):
     httpMethod = event['requestContext']['httpMethod'].lower()
     secret = os.environ["dropbox_webhook_secret"]
     app_token = os.environ["dropbox_app_token"]
+    dropbox_input_path = os.environ.get("dropbox_input_path", "/app/input")
     try:
         __logger.info(event)
         req_body = event['body']
@@ -44,8 +48,8 @@ def lambda_handler(event, context):
                                          s3_path=os.environ["s3_path"])
             ocr_helper = OCRHelper()
             updated = handle_changed_docs(req_body,
-                                          dropbox_helper=DropboxHelper(app_token, cursor_helper, s3_resource=boto3.resource("s3")),
-                                          pdf_helper=PDFHelper(ocr_helper))
+                                          dropbox_helper=DropboxHelper(app_token, cursor_helper, s3_resource=boto3.resource("s3"), dropbox_input_path=dropbox_input_path),
+                                          pdf_helper=PDFHelper(ocr_helper), docx_helper=DocxHelper())
             return resp(200, json.dumps({"updated": updated}))
         elif 'get' == httpMethod:
             __logger.info("dropbox webhook verification")
@@ -87,7 +91,7 @@ def resp(status_code, body, headers=None):
     return r
 
 
-def handle_changed_docs(req_body, dropbox_helper, pdf_helper):
+def handle_changed_docs(req_body, dropbox_helper, pdf_helper, docx_helper):
     """
     Given a Dropbox changed doc webhook react to changed data.
     :param Dropbox webhook post data
@@ -98,44 +102,51 @@ def handle_changed_docs(req_body, dropbox_helper, pdf_helper):
     for account, dropbox_doc_paths in dropbox_helper.get_changed(req_body).items():
         for dropbox_doc_path in dropbox_doc_paths:
             text = None
+            local_doc_path = "/tmp/%s" % dropbox_doc_path.split("/")[-1]
             if dropbox_doc_path[-4:] == '.doc':
-                local_doc_path = "/tmp%s" % dropbox_doc_path
+                __logger.info("downloading %s to %s" % (dropbox_doc_path, local_doc_path))
                 resp = dropbox_helper.download_file(dropbox_doc_path, local_doc_path)
-                print(resp)
+                __logger.info(resp)
                 with open(local_doc_path, "rb") as f:
                     data = f.read()
-                    print("downloaded %d bytes" % len(data))
+                    __logger.info("downloaded %d bytes" % len(data))
                     import subprocess
                     try:
-                        print(subprocess.check_output(['ls', '-l', '/usr/share']))
+                        __logger.error(subprocess.check_output(['ls', '-l', '/usr/share']))
                     except Exception as e:
-                        print(e)
+                        __logger.error(e)
                     try:
-                        print(subprocess.check_output(['mkdir', '-p', '/usr/local/share']))
+                        __logger.info(subprocess.check_output(['mkdir', '-p', '/usr/local/share']))
                     except Exception as e:
-                        print(e)
+                        __logger.error(e)
                     try:
-                        print(subprocess.check_output(['cp', '-r', '/opt/share/', '/usr/local/share']))
+                        __logger.info(subprocess.check_output(['cp', '-r', '/opt/share/', '/usr/local/share']))
                     except Exception as e:
-                        print(e)
+                        __logger.error(e)
                     try:
                         text = subprocess.check_output(['antiword', local_doc_path])
                     except subprocess.CalledProcessError as exc:
-                        print("Status : FAIL", exc.returncode, exc.output)
-            if pdf_helper.is_pdf(dropbox_doc_path) and dropbox_doc_paths[-1 * len(__upload_dir):] != __upload_dir:
-                local_doc_path = "/tmp%s" % dropbox_doc_path
+                        __logger.error("Status : FAIL", exc.returncode, exc.output)
+            handler = pdf_helper if pdf_helper.can_handle(dropbox_doc_path) else docx_helper if docx_helper.can_handle(dropbox_doc_path) else None
+            if not handler:
+                __logger.warning("warning: no handler for %s" % dropbox_doc_path)
+                return None
+            if dropbox_doc_paths[-1 * len(__upload_dir):] != __upload_dir:
+                __logger.info("downloading %s to %s" % (dropbox_doc_path, local_doc_path))
                 resp = dropbox_helper.download_file(dropbox_doc_path, local_doc_path)
-                print(resp)
+                __logger.info(resp)
                 with open(local_doc_path, "rb") as f:
                     data = f.read()
-                    print("downloaded %d bytes" % len(data))
-                text = pdf_helper.get_text(local_doc_path, resolution=__resolution, max_workers=__max_workers)
+                    __logger.info("downloaded %d bytes" % len(data))
+                    __logger.info("invoking handler %s" % handler)
+                text = handler.get_text(local_doc_path, resolution=__resolution, max_workers=__max_workers)
             if text:
                 __logger.info(text)
                 __logger.debug("converted doc %s %s" % (account, dropbox_doc_path))
-                upload_path = "%s%s.txt" % (__upload_dir, ".".join(dropbox_doc_path.split(".")[:-1]))
+                # last part of local path replacing ext with .txt
+                upload_path = "%s/%s.txt" % (__upload_dir, "".join(local_doc_path.split("/")[-1].split(".")[:-1]))
                 result = dropbox_helper.store_data(text, upload_path)
-                print(result)
+                __logger.info(result)
                 uploaded_docs.append(upload_path)
     __logger.debug("uploaded docs %s" % uploaded_docs)
     return uploaded_docs

@@ -52,7 +52,5 @@ cd $base_dir
 echo Deploying $s3_path
 aws s3 cp --acl bucket-owner-full-control $build_dir/$zip_name $s3_path
 
-echo https://s3.amazonaws.com/meadowbrook-build-deploy/$s3_path
-
 echo "Done."
 exit 0

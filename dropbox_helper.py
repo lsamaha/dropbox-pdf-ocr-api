@@ -5,10 +5,11 @@ from dropbox.files import DeletedMetadata, FolderMetadata, WriteMode
 
 class DropboxHelper(object):
 
-    def __init__(self, app_token, cursor_helper, s3_resource):
+    def __init__(self, app_token, cursor_helper, s3_resource, dropbox_input_path):
         self.__app_token = app_token
         self.__cursor_helper = cursor_helper
         self.__s3_resource = s3_resource
+        self.__dropbox_input_path = dropbox_input_path
 
     def get_changed(self, req_body):
         """
@@ -19,7 +20,10 @@ class DropboxHelper(object):
         """
         changed = {}
         for account in json.loads(req_body)['list_folder']['accounts']:
-            account_changed, new_cursor = self.get_changed_for_account(account, self.__app_token, self.get_cursor(account))
+            account_changed, new_cursor = self.get_changed_for_account(account,
+                                                                       self.__app_token,
+                                                                       self.get_cursor(account),
+                                                                       self.__dropbox_input_path)
             if account_changed:
                 changed[account] = account_changed
             if new_cursor:
@@ -42,7 +46,7 @@ class DropboxHelper(object):
         print("updating cursor for %s to %s" % (account, cursor))
         self.__cursor_helper.set_cursor(self.__s3_resource, account, cursor)
 
-    def get_changed_for_account(self, account, account_token, cursor):
+    def get_changed_for_account(self, account, account_token, cursor, input_path="/app/input"):
         dropbox = Dropbox(account_token)
         print("getting dropbox changed paths for account %s" % account)
         has_more = True
@@ -50,7 +54,7 @@ class DropboxHelper(object):
         new_cursor = None
         while has_more:
             if cursor is None:
-                result = dropbox.files_list_folder(path="")
+                result = dropbox.files_list_folder(path=input_path)
             else:
                 result = dropbox.files_list_folder_continue(cursor)
             print(result)
