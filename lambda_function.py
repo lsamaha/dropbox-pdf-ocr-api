@@ -98,6 +98,7 @@ def handle_changed_docs(req_body, dropbox_helper, pdf_helper, docx_helper):
     :return: a list of converted and reposted docs
     """
     __logger.debug("getting changed docs %s" % json.dumps(req_body))
+    converted_docs = []
     uploaded_docs = []
     for account, dropbox_doc_paths in dropbox_helper.get_changed(req_body).items():
         for dropbox_doc_path in dropbox_doc_paths:
@@ -130,17 +131,18 @@ def handle_changed_docs(req_body, dropbox_helper, pdf_helper, docx_helper):
             handler = pdf_helper if pdf_helper.can_handle(dropbox_doc_path) else docx_helper if docx_helper.can_handle(dropbox_doc_path) else None
             if not handler:
                 __logger.warning("warning: no handler for %s" % dropbox_doc_path)
-                return None
-            if dropbox_doc_paths[-1 * len(__upload_dir):] != __upload_dir:
-                __logger.info("downloading %s to %s" % (dropbox_doc_path, local_doc_path))
-                resp = dropbox_helper.download_file(dropbox_doc_path, local_doc_path)
-                __logger.info(resp)
-                with open(local_doc_path, "rb") as f:
-                    data = f.read()
-                    __logger.info("downloaded %d bytes" % len(data))
-                    __logger.info("invoking handler %s" % handler)
-                text = handler.get_text(local_doc_path, resolution=__resolution, max_workers=__max_workers)
+            else:
+                if dropbox_doc_paths[-1 * len(__upload_dir):] != __upload_dir:
+                    __logger.info("downloading %s to %s" % (dropbox_doc_path, local_doc_path))
+                    resp = dropbox_helper.download_file(dropbox_doc_path, local_doc_path)
+                    __logger.info(resp)
+                    with open(local_doc_path, "rb") as f:
+                        data = f.read()
+                        __logger.info("downloaded %d bytes" % len(data))
+                        __logger.info("invoking handler %s" % handler)
+                    text = handler.get_text(local_doc_path, resolution=__resolution, max_workers=__max_workers)
             if text:
+                converted_docs.append(dropbox_doc_path)
                 __logger.info(text)
                 __logger.debug("converted doc %s %s" % (account, dropbox_doc_path))
                 # last part of local path replacing ext with .txt
@@ -148,5 +150,8 @@ def handle_changed_docs(req_body, dropbox_helper, pdf_helper, docx_helper):
                 result = dropbox_helper.store_data(text, upload_path)
                 __logger.info(result)
                 uploaded_docs.append(upload_path)
+        print("cleaning up %s" % converted_docs)
+        for converted_doc in converted_docs:
+            dropbox_helper.delete(converted_doc)
     __logger.debug("uploaded docs %s" % uploaded_docs)
     return uploaded_docs

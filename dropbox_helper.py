@@ -39,6 +39,12 @@ class DropboxHelper(object):
         print("storing %s" % dropbox_path)
         return dropbox.files_upload(data.encode("utf-8"), dropbox_path, mode=WriteMode.overwrite)
 
+    def delete(self, dropbox_path):
+        dropbox = Dropbox(self.__app_token)
+        print("deleting %s" % dropbox_path)
+        return dropbox.files_delete_v2(dropbox_path)
+
+
     def get_cursor(self, account):
         return self.__cursor_helper.get_cursor(self.__s3_resource, account)
 
