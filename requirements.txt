@@ -13,4 +13,4 @@ s3transfer==0.1.13
 six==1.12.0
 urllib3==1.24.1
 docx2txt==0.7
-lxml==4.3.2
+lxml==4.6.3
