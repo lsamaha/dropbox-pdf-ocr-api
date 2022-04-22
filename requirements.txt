@@ -6,7 +6,7 @@ docutils==0.14
 dropbox==9.3.0
 idna==2.8
 jmespath==0.9.3
-PyPDF2==1.26.0
+PyPDF2==1.27.5
 python-dateutil==2.7.5
 requests==2.21.0
 s3transfer==0.1.13
